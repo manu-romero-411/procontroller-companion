@@ -61,7 +61,7 @@ ui = UInput({e.EV_KEY: [e.KEY_SYSRQ]}, name="procontroller-companion-vkbd")
 
 
 def load_home_command():
-    cp = configparser.ConfigParser()
+    cp = configparser.ConfigParser(interpolation=None)
     for path in CONFIG_PATHS:
         if os.path.isfile(path):
             cp.read(path)
@@ -95,10 +95,12 @@ def get_active_graphical_session():
     return None
 
 
-def find_user_display_env(uid):
-    """Best-effort: look for DISPLAY/WAYLAND_DISPLAY/XAUTHORITY in a
-    running process owned by uid, so GUI commands can reach the screen."""
-    result = {}
+def find_user_session_env(uid):
+    """Return a full copy of the environment of a running process owned
+    by uid that looks like part of a graphical session (has DISPLAY or
+    WAYLAND_DISPLAY set). This carries over XDG_CURRENT_DESKTOP,
+    DBUS_SESSION_BUS_ADDRESS, PATH, LANG, etc. instead of guessing which
+    handful of variables a given home_launch command might need."""
     try:
         for pid in os.listdir("/proc"):
             if not pid.isdigit():
@@ -116,13 +118,10 @@ def find_user_display_env(uid):
                 if "=" in item
             )
             if "DISPLAY" in env_vars or "WAYLAND_DISPLAY" in env_vars:
-                for key in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
-                    if key in env_vars:
-                        result.setdefault(key, env_vars[key])
-                break
+                return env_vars
     except Exception:
         pass
-    return result
+    return {}
 
 
 def trigger_home_action():
@@ -138,17 +137,19 @@ def trigger_home_action():
         return
 
     username, uid = session
-    env_pairs = {"XDG_RUNTIME_DIR": f"/run/user/{uid}"}
+    uid = int(uid)
+    env = find_user_session_env(uid)
+    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
     bus_path = f"/run/user/{uid}/bus"
-    if os.path.exists(bus_path):
-        env_pairs["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={bus_path}"
-    env_pairs.update(find_user_display_env(int(uid)))
+    if "DBUS_SESSION_BUS_ADDRESS" not in env and os.path.exists(bus_path):
+        env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={bus_path}"
 
     print(f"[+] Home double-press -> running as {username}: {cmd}", flush=True)
-    # Fire-and-forget; runs as the logged-in user with their session bus
-    # and display, not as root. Bash itself handles quoting/escaping.
-    env_args = [f"{k}={v}" for k, v in env_pairs.items()]
-    subprocess.Popen(["runuser", "-u", username, "--", "env", *env_args, "bash", "-c", cmd])
+    # Fire-and-forget; runs as the logged-in user with a full copy of
+    # their desktop session's environment, not as root. Bash itself
+    # handles quoting/escaping of the configured command.
+    env_args = [f"{k}={v}" for k, v in env.items()]
+    subprocess.Popen(["runuser", "-u", username, "--", "env", "-i", *env_args, "bash", "-c", cmd])
 
 
 def handle_device(path):
