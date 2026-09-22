@@ -1,0 +1,15 @@
+[Unit]
+Description=Pro Controller companion daemon (screenshot map + Home double-press launcher)
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/local/bin/procontroller-companion
+Restart=always
+RestartSec=2
+# Runs as root to keep access to /dev/input/event* and /dev/uinput simple.
+# To avoid root, add your user to the "input" group and set up a udev
+# rule granting group access to /dev/uinput, then remove this line.
+User=root
+
+[Install]
+WantedBy=multi-user.target
