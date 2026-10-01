@@ -1,14 +1,13 @@
 [Unit]
 Description=Pro Controller companion daemon (screenshot map + Home double-press launcher)
-After=multi-user.target
+After=systemd-udevd.service bluetooth.target
+Wants=bluetooth.target
+StartLimitIntervalSec=0
 
 [Service]
 ExecStart=/usr/local/bin/procontroller-companion
 Restart=always
-RestartSec=2
-# Runs as root to keep access to /dev/input/event* and /dev/uinput simple.
-# To avoid root, add your user to the "input" group and set up a udev
-# rule granting group access to /dev/uinput, then remove this line.
+RestartSec=3
 User=root
 
 [Install]

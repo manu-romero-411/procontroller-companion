@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="input", ATTRS{name}=="*Pro Controller*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="procontroller-companion.service"
